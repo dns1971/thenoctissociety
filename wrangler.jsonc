@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thenoctissociety",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "404-page"
+  },
+  "send_email": [{
+    "name": "BRIEF_EMAIL",
+    "destination_address": "support@owleyesdroneservices.com",
+    "allowed_sender_addresses": ["support@thenoctissociety.com"]
+  }],
+  "ratelimits": [{
+    "name": "BRIEF_LIMIT",
+    "namespace_id": "2026092401",
+    "simple": {"limit": 5, "period": 60}
+  }, {
+    "name": "BRIEF_TOTAL_LIMIT",
+    "namespace_id": "2026092402",
+    "simple": {"limit": 30, "period": 60}
+  }],
+  "observability": {"enabled": true, "head_sampling_rate": 1}
+}

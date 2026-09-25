@@ -24,7 +24,15 @@ if (menuButton && navigation) {
 document.querySelectorAll('[data-year]').forEach(element => element.textContent = new Date().getFullYear());
 const form = document.querySelector('#brief-form');
 if (form) {
-  form.querySelector('button[type="submit"]').disabled = false;
+  const submit = form.querySelector('button[type="submit"]');
+  const status = document.querySelector('#brief-status');
+  const success = document.querySelector('#brief-success');
+  const reference = document.querySelector('#brief-reference');
+  const another = document.querySelector('#another-brief');
+  const fields = [...form.querySelectorAll('input, select, textarea')];
+  let sending = false;
+  let sent = false;
+  submit.disabled = false;
   const interests = {
     operations: ['AI & workflow automation', ''],
     poker: ['Venture collaboration', 'Poker Mastery'],
@@ -40,48 +48,63 @@ if (form) {
     const count = essentials.filter(name => form.elements[name].value.trim() && form.elements[name].checkValidity()).length;
     document.querySelector('#brief-progress').textContent = `${count} of 4 essentials complete`;
   };
-  form.addEventListener('input', () => {
-    updateProgress();
-    if (!document.querySelector('#brief-result').hidden) {
-      document.querySelector('#brief-result').hidden = true;
-      document.querySelector('#brief-status').textContent = 'Your details changed. Prepare the brief again to refresh the dossier.';
-    }
-  });
+  form.addEventListener('input', updateProgress);
   updateProgress();
-  form.addEventListener('submit', event => {
+  form.addEventListener('submit', async event => {
     event.preventDefault();
+    if (sending || sent) return;
     if (!form.reportValidity()) return;
     const data = new FormData(form);
-    const brief = `NOCTIS — PROJECT BRIEF\n\nName: ${data.get('name')}\nEmail: ${data.get('email')}\nCompany: ${data.get('company') || 'Not supplied'}\nSupport: ${data.get('support')}\nTimeline: ${data.get('timeline')}\n\nWhat I am building:\n${data.get('message')}\n`;
-    const output = document.querySelector('#brief-output');
-    output.value = brief;
-    document.querySelector('#email-brief').href = 'mailto:support@thenoctissociety.com?subject=' + encodeURIComponent('Noctis project inquiry — ' + data.get('support')) + '&body=' + encodeURIComponent(brief);
-    document.querySelector('#brief-result').hidden = false;
-    output.focus();
-    document.querySelector('#brief-status').textContent = 'Your email is ready below. Open your email app to review and send it. Nothing has been sent yet.';
-  });
-  document.querySelector('#download-brief').addEventListener('click', () => {
-    const blob = new Blob([document.querySelector('#brief-output').value], {type: 'text/plain;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'noctis-project-brief.txt';
-    document.body.append(link);
-    link.click();
-    link.remove();
-    document.querySelector('#brief-status').textContent = 'Download requested. Your brief has not been sent.';
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  });
-  document.querySelector('#copy-brief').addEventListener('click', async () => {
-    const output = document.querySelector('#brief-output');
+    const brief = Object.fromEntries(['name', 'email', 'company', 'support', 'timeline', 'message', 'website']
+      .map(name => [name, String(data.get(name) || '').trim()]));
+    sending = true;
+    submit.disabled = true;
+    fields.forEach(field => { field.disabled = true; });
+    form.setAttribute('aria-busy', 'true');
+    status.textContent = 'Sending your brief…';
+    status.dataset.state = 'sending';
     try {
-      await navigator.clipboard.writeText(output.value);
-      document.querySelector('#brief-status').textContent = 'Brief copied. Paste it into your email to support@thenoctissociety.com. Nothing has been sent.';
-    } catch {
-      output.focus();
-      output.select();
-      document.querySelector('#brief-status').textContent = 'Your brief is selected. Use your device’s Copy command, then paste it into your email.';
+      const response = await fetch('/api/brief', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify(brief)
+      });
+      const result = await response.json();
+      if (!response.ok || result.ok !== true) {
+        if (response.status === 429) throw new Error('rate-limit');
+        throw new Error('send-failed');
+      }
+      sent = true;
+      reference.textContent = result.reference ? `REFERENCE / ${result.reference}` : '';
+      reference.hidden = !result.reference;
+      success.hidden = false;
+      status.textContent = 'Your brief was sent to The Noctis Society.';
+      status.dataset.state = 'success';
+      success.focus();
+    } catch (error) {
+      status.textContent = error.message === 'rate-limit'
+        ? 'Please wait a few minutes before sending another brief. You can also email support@thenoctissociety.com directly.'
+        : 'We could not confirm delivery. Please try again, or email support@thenoctissociety.com directly.';
+      status.dataset.state = 'error';
+      submit.disabled = false;
+    } finally {
+      sending = false;
+      fields.forEach(field => { field.disabled = sent; });
+      form.removeAttribute('aria-busy');
     }
+  });
+  another.addEventListener('click', () => {
+    form.reset();
+    sent = false;
+    success.hidden = true;
+    submit.disabled = false;
+    status.textContent = '';
+    delete status.dataset.state;
+    reference.hidden = true;
+    reference.textContent = '';
+    fields.forEach(field => { field.disabled = false; });
+    updateProgress();
+    form.elements.name.focus();
   });
 }
 
